@@ -1,0 +1,35 @@
+<article class="card">
+  {% if photo.thumb %}<img src="{{ photo.thumb }}" alt="{{ photo.name }}" />{% endif %}
+  <div class="body">
+    <div class="top">
+      <div class="score">{{ photo.score }} 分 · {{ photo.grade }}</div>
+      {% if photo.category %}<div class="badge">{{ photo.category }}</div>{% endif %}
+    </div>
+    <h3>{{ photo.name }}</h3>
+
+    <div class="section">
+      <div class="label">摄影师点评</div>
+      <p>{{ photo.review }}</p>
+    </div>
+
+    <div class="section">
+      <div class="label">Lightroom 修图建议</div>
+      <p>{{ photo.retouch }}</p>
+    </div>
+
+    {% if photo.publish %}
+    <div class="section">
+      <div class="label">发布建议</div>
+      <p>{{ photo.publish }}</p>
+    </div>
+    {% endif %}
+
+    {% if photo.exif %}
+    <div class="exif">
+      {% for k, v in photo.exif.items() %}
+      <span>{{ k }}：{{ v }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</article>
