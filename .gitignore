@@ -1,0 +1,46 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ===== 虚拟环境 =====
+venv/
+env/
+.venv/
+ENV/
+
+# ===== 测试 / 缓存 =====
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+
+# ===== PyInstaller 产物 =====
+build/build_exe/
+*.spec.bak
+dist/*.exe
+dist/*.bak*
+
+# ===== 编辑器 / 系统 =====
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ===== 本项目内部/敏感目录（勿提交）=====
+.workbuddy/
+
+# ===== 日志 =====
+*.log

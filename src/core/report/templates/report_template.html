@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI摄影管家 · 摄影报告</title>
+  <style>
+    :root {
+      --bg:#FBF7F2; --card:#FFFFFF; --text:#2E2419; --muted:#A59787;
+      --accent:#E07B39; --accent2:#C96A2C; --good:#E07B39; --line:#EADFD1;
+      --soft:#FDF8F1;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text);
+           font-family:"Segoe UI","Microsoft YaHei",sans-serif; }
+    header { padding:52px 40px 44px; text-align:center; border-bottom:1px solid var(--line);
+             background:radial-gradient(1100px 340px at 50% -140px, rgba(224,123,57,.16), transparent),
+                        radial-gradient(800px 260px at 78% -120px, rgba(232,178,122,.14), transparent); }
+    header h1 { margin:0; font-size:34px; letter-spacing:3px; color:var(--accent2); }
+    header p { color:var(--muted); margin-top:12px; }
+    .stats { display:flex; justify-content:center; gap:44px; margin-top:26px; flex-wrap:wrap; }
+    .stat b { font-size:26px; color:var(--accent); display:block; font-weight:700; }
+    .stat span { color:var(--muted); font-size:13px; }
+    .section-block { margin:36px auto 0; max-width:1240px; padding:0 40px; }
+    .section-block h2 { font-size:20px; color:var(--accent2); letter-spacing:2px; margin:0 0 6px;
+                        display:flex; align-items:center; gap:10px; }
+    .section-block .summary { color:var(--muted); font-size:13px; margin:0 0 18px; }
+    .section-block h2 .count { font-size:13px; color:var(--muted); font-weight:normal; letter-spacing:0; }
+    .dedup-group { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--accent);
+                   border-radius:10px; padding:10px 14px; margin-bottom:10px; font-size:13px; line-height:1.7;
+                   box-shadow:0 2px 10px rgba(60,40,20,.06); }
+    .dedup-group .kept { color:var(--good); font-weight:600; }
+    .dedup-group .similar { color:var(--muted); word-break:break-all; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
+            gap:24px; }
+    .card { background:var(--card); border-radius:14px; overflow:hidden; border:1px solid var(--line);
+            display:flex; flex-direction:column;
+            box-shadow:0 4px 18px rgba(60,40,20,.08); }
+    .card img { width:100%; display:block; aspect-ratio:4/3; object-fit:cover;
+                background:#f0e8dc; }
+    .card .body { padding:18px; flex:1; }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .score { font-size:22px; color:var(--accent); font-weight:700; }
+    .badge { font-size:12px; color:var(--accent2); background:var(--soft);
+             border:1px solid var(--line); border-radius:999px; padding:2px 10px; }
+    .card h3 { margin:8px 0 6px; font-size:15px; word-break:break-all; color:var(--muted); }
+    .section { margin-top:12px; }
+    .section .label { font-size:12px; color:var(--accent); letter-spacing:1px; font-weight:600; }
+    .section p { color:var(--text); font-size:13px; line-height:1.7; margin:4px 0 0;
+                 white-space:pre-wrap; }
+    .exif { margin-top:10px; font-size:11px; color:var(--muted); display:flex; flex-wrap:wrap; gap:6px; }
+    .exif span { background:var(--soft); border:1px solid var(--line); border-radius:6px; padding:2px 7px; }
+    /* 等级徽章 */
+    .tier-tag { font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; }
+    .tier-tag.t1 { background:#E07B39; color:#fff; }
+    .tier-tag.t2 { background:#FDF8F1; color:#C96A2C; border:1px solid var(--line); }
+    .tier-tag.t3 { background:#fff; color:#A59787; border:1px solid var(--line); }
+    /* 废片列表 */
+    .rej-table { width:100%; border-collapse:collapse; background:var(--card); border-radius:10px;
+                 overflow:hidden; border:1px solid var(--line); }
+    .rej-table th, .rej-table td { padding:10px 14px; text-align:left; font-size:13px; }
+    .rej-table th { background:var(--soft); color:var(--accent2); font-weight:600;
+                    border-bottom:1px solid var(--line); }
+    .rej-table td { border-top:1px solid var(--line); color:var(--text); }
+    .rej-table .dup-marker { color:var(--accent); font-size:11px; }
+    .empty { color:var(--muted); font-size:13px; padding:14px; background:var(--card);
+             border:1px dashed var(--line); border-radius:10px; text-align:center; }
+    footer { text-align:center; color:var(--muted); padding:30px; font-size:12px;
+             border-top:1px solid var(--line); margin-top:36px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AI摄影管家 · 摄影报告</h1>
+    <p>分析时间：{{ analysis_time }} · 共分析 {{ total }} 张</p>
+    <div class="stats">
+      <div class="stat"><b>{{ total }}</b><span>分析照片</span></div>
+      <div class="stat"><b>{{ tier1|length }}</b><span>精选</span></div>
+      <div class="stat"><b>{{ tier2_count }}</b><span>良好</span></div>
+      <div class="stat"><b>{{ tier3_count }}</b><span>普通</span></div>
+      <div class="stat"><b>{{ rejected|length }}</b><span>废片</span></div>
+      <div class="stat"><b>{{ avg_score }}</b><span>平均分</span></div>
+      {% if dedup_count %}
+      <div class="stat"><b>{{ dedup_count }}</b><span>自动去重</span></div>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if dedup_groups %}
+  <section class="section-block">
+    <h2>相似照片 · 已自动去重 <span class="count">(档位「{{ dedup_level }}」，共 {{ dedup_groups|length }} 组，去除 {{ dedup_count }} 张)</span></h2>
+    <p class="summary">每组只保留最清晰的一张进入 AI 评分，其余标为「高度相似 / 完全重复」并展示于此。</p>
+    {% for g in dedup_groups %}
+    <div class="dedup-group">
+      <div class="kept">✓ 保留：{{ g.kept }}</div>
+      <div class="similar">{{ g.reason }} · 已去重：{{ g.similar|join('、') }}</div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="section-block">
+    <h2><span class="tier-tag t1">精选</span> <span class="count">{{ tier1|length }} 张</span></h2>
+    {% if tier1 %}
+    <div class="grid">
+      {% for photo in tier1 %}{% include "_card.html" %}{% endfor %}
+    </div>
+    {% else %}<div class="empty">本次没有进入精选的照片。</div>{% endif %}
+  </section>
+
+  <section class="section-block">
+    <h2><span class="tier-tag t2">良好</span> <span class="count">{{ tier2|length }} 张（等级 A 及以上，≥80 分）</span></h2>
+    {% if tier2 %}
+    <div class="grid">
+      {% for photo in tier2 %}{% include "_card.html" %}{% endfor %}
+    </div>
+    {% else %}<div class="empty">本次没有「良好」级别的照片。</div>{% endif %}
+  </section>
+
+  <section class="section-block">
+    <h2><span class="tier-tag t3">普通</span> <span class="count">{{ tier3|length }} 张（等级 B 及以下）</span></h2>
+    {% if tier3 %}
+    <div class="grid">
+      {% for photo in tier3 %}{% include "_card.html" %}{% endfor %}
+    </div>
+    {% else %}<div class="empty">本次没有「普通」级别的照片。</div>{% endif %}
+  </section>
+
+  {% if rejected %}
+  <section class="section-block">
+    <h2>废片 · 不参与评分 <span class="count">({{ rejected|length }} 张)</span></h2>
+    <p class="summary">因模糊、曝光异常、分辨率过低或与候选重复而被淘汰的照片。仅作记录。</p>
+    <table class="rej-table">
+      <thead><tr><th style="width:46%">文件名</th><th>去除原因</th></tr></thead>
+      <tbody>
+      {% for r in rejected %}
+        <tr>
+          <td>{{ r.name }}{% if r.is_dup %} <span class="dup-marker">（相似于 {{ r.dup_of }}）</span>{% endif %}</td>
+          <td>{{ r.reason }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  <footer>由 AI摄影管家生成 · 仅供摄影参考</footer>
+</body>
+</html>
