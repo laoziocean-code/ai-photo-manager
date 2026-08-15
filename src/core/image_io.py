@@ -207,30 +207,38 @@ def _extract_exif_raw(path: str) -> Dict[str, Any]:
             v = _exifread_num(tags.get(src), kind)
             if v is not None:
                 meta[dst] = v
-        # 传感器尺寸（用于分辨率过滤）：优先 IFD0 的 ImageWidth/ImageLength
-        w = _exifread_num(tags.get("Image ImageWidth"), "int")
-        h = _exifread_num(tags.get("Image ImageLength"), "int")
     except Exception:
         pass
 
-    # 尺寸回退：exifread 取不到时用 rawpy 头信息（raw.sizes，只读文件头，
-    # 零解码开销）；个别 rawpy 版本无 sizes 属性时再退到解码一帧。
-    if not w or not h:
-        raw = _raw_open(path)
-        if raw is not None:
-            try:
-                sz = getattr(raw, "sizes", None)
-                if sz:
+    # 尺寸：优先 rawpy 头信息 raw.sizes（传感器真实尺寸，只读文件头、零解码开销）。
+    # 不能用 exifread 的 ImageWidth/ImageLength——对 NEF 等文件那是**内嵌预览图**
+    # 的尺寸（可能只有 160×120），会把正常 RAW 误判为「分辨率过低」。
+    raw = _raw_open(path)
+    if raw is not None:
+        try:
+            sz = getattr(raw, "sizes", None)
+            if sz is not None:
+                if hasattr(sz, "width") and hasattr(sz, "height"):
+                    w, h = int(sz.width), int(sz.height)
+                elif len(sz) >= 2:  # 兼容 tuple 形式 (height, width)
                     h, w = int(sz[0]), int(sz[1])
-                else:
-                    arr = raw.postprocess()
-                    h, w = arr.shape[:2]
-            except Exception:
-                pass
-            try:
-                raw.close()
-            except Exception:
-                pass
+        except Exception:
+            pass
+        try:
+            raw.close()
+        except Exception:
+            pass
+
+    # rawpy 不可用时才退到 exifread 的 IFD0 尺寸（ exotic 格式兜底）
+    if not w or not h:
+        try:
+            import exifread
+            with open(path, "rb") as fh:
+                tags = exifread.process_file(fh, details=False, strict=False)
+            w = _exifread_num(tags.get("Image ImageWidth"), "int")
+            h = _exifread_num(tags.get("Image ImageLength"), "int")
+        except Exception:
+            pass
 
     if w:
         meta["width"] = w
@@ -279,11 +287,24 @@ def _pil_to_gray(im: Image.Image, longest: int) -> np.ndarray:
     return np.array(im, dtype=np.uint8)
 
 
+def _thumb_usable(im: Image.Image) -> bool:
+    """内嵌预览图是否可用：太小（<256px，Laplacian 方差系统性偏低）或
+    异常偏黑（均值 <5，个别相机的内嵌 JPEG 近似全黑，会误导曝光/模糊判断）
+    都视为不可用，应降级为解码。"""
+    if max(im.size) < 256:
+        return False
+    try:
+        tiny = np.array(im.convert("L").resize((64, 64)), dtype=np.uint8)
+        return float(tiny.mean()) >= 5.0
+    except Exception:
+        return False
+
+
 def load_gray_small(path: str, longest: int = 512) -> np.ndarray:
     """统一加载灰度小图（最长边 <= longest），供模糊/曝光检测使用。
 
-    RAW 优先用内嵌 JPEG 缩略图（极快）；内嵌图缺失或太小时（最长边 < 256px，
-    会导致 Laplacian 方差系统性偏低，把清晰照片误判为模糊）降级到解码。
+    RAW 优先用内嵌 JPEG 缩略图（极快）；内嵌图缺失、太小或异常偏黑时
+    降级到 half_size 解码。
     """
     if is_raw(path) and rawpy is not None:
         raw = _raw_open(path)
@@ -293,7 +314,7 @@ def load_gray_small(path: str, longest: int = 512) -> np.ndarray:
                 thumb = raw.extract_thumb()
                 if thumb is not None and getattr(thumb, "format", None) == rawpy.ThumbFormat.JPEG:
                     with Image.open(BytesIO(thumb.data)) as t:
-                        if max(t.size) >= 256:
+                        if _thumb_usable(t):
                             im = t.convert("RGB")
                 if im is None:
                     arr = _rgb_from_raw(raw)
@@ -359,8 +380,8 @@ def _thumb_raw(path: str, size: int = 512) -> Optional[bytes]:
         thumb = raw.extract_thumb()
         if thumb is not None and getattr(thumb, "format", None) == rawpy.ThumbFormat.JPEG:
             with Image.open(BytesIO(thumb.data)) as im:
-                # 内嵌图太小（<256px）时放大显示会糊，降级解码
-                if max(im.size) >= 256:
+                # 内嵌图太小或异常偏黑（个别相机内嵌 JPEG 近全黑）时降级解码
+                if _thumb_usable(im):
                     im.thumbnail((size, size))
                     buf = BytesIO()
                     im.convert("RGB").save(buf, format="JPEG", quality=85)

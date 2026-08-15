@@ -49,10 +49,11 @@ class _Tag:
 class _FakeRaw:
     """模拟 rawpy.RawPy：postprocess 返回 RGB，extract_thumbnail 返回 JPEG。"""
 
-    def __init__(self, arr=None, thumb=None):
+    def __init__(self, arr=None, thumb=None, sizes=(4000, 6000)):
         self._arr = arr if arr is not None else _make_rgb(128, 160)
         self._thumb = thumb  # bytes(JPEG) 或 None
-        self.sizes = (120, 160)  # (height, width)，与 _make_rgb(120,160) 一致
+        # (height, width) 传感器尺寸；默认与 fake_exifread 的 6000×4000 一致
+        self.sizes = sizes
         self.closed = False
 
     def postprocess(self, *a, **k):
@@ -261,9 +262,47 @@ def test_extract_exif_raw_dims_fallback(fake_rawpy, tmp_path, monkeypatch):
     p = tmp_path / "x.nef"
     p.write_bytes(b"FAKE_NEF_BYTES")
     meta = extract_exif(str(p))
-    # _FakeRaw.sizes=(120,160) → width=160, height=120
-    assert meta["width"] == 160
-    assert meta["height"] == 120
+    # _FakeRaw.sizes=(4000,6000) → width=6000, height=4000
+    assert meta["width"] == 6000
+    assert meta["height"] == 4000
+
+
+def test_extract_exif_raw_prefers_sensor_dims(fake_rawpy, tmp_path, monkeypatch):
+    """exifread 的 IFD0 尺寸是内嵌预览图大小（如 160×120）时，
+    必须用 raw.sizes 的传感器尺寸，否则会把正常 RAW 误判为「分辨率过低」。"""
+
+    def _process_tiny_dims(fh, details=False, strict=True):
+        return {
+            "Image Make": _Tag("NIKON"),
+            "Image ImageWidth": _Tag(160),
+            "Image ImageLength": _Tag(120),
+        }
+
+    import exifread
+    monkeypatch.setattr(exifread, "process_file", _process_tiny_dims)
+
+    p = tmp_path / "x.nef"
+    p.write_bytes(b"FAKE_NEF_BYTES")
+    meta = extract_exif(str(p))
+    assert meta["width"] == 6000
+    assert meta["height"] == 4000
+
+
+def test_raw_dark_blurry_not_rejected(tmp_path, monkeypatch):
+    """RAW 不做模糊/曝光淘汰：暗且平的「夜景」RAW 应保留为候选，
+    交由 AI 评分判断质量（预处理只去重 + 校验分辨率）。"""
+    dark_flat = np.full((120, 160, 3), 10, dtype=np.uint8)
+
+    def _imread(path):
+        return _FakeRaw(arr=dark_flat, thumb=None, sizes=(4000, 6000))
+
+    monkeypatch.setattr(image_io.rawpy, "imread", _imread)
+
+    from src.core.preprocessing.quality_filter import filter_photos
+    p = tmp_path / "night.nef"
+    p.write_bytes(b"FAKE_NEF_BYTES")
+    cands, rej = filter_photos([str(p)], options={"dedup_level": "关闭"})
+    assert len(cands) == 1 and rej == []
 
 
 # --------------------------------------------------------------------------- #

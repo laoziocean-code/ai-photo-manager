@@ -13,7 +13,7 @@ dup_group/dup_of 归属，可用 collect_dedup_groups 汇总成报告用结构�
 import os
 from typing import Dict, List, Optional, Sequence
 
-from src.core.image_io import ImageMeta, extract_exif
+from src.core.image_io import ImageMeta, extract_exif, is_raw
 from src.core.preprocessing.blur_detect import blur_score, is_blurry
 from src.core.preprocessing.deduplication import (
     DEDUP_LEVELS, DEFAULT_DEDUP_LEVEL, compute_md5, compute_phash,
@@ -21,6 +21,7 @@ from src.core.preprocessing.deduplication import (
 )
 from src.core.preprocessing.exposure_detect import exposure_stats
 from src.core.record import PhotoRecord
+from src.utils.file_utils import sniff_raw
 
 DEFAULT_OPTIONS: Dict[str, object] = {
     "dedup_level": DEFAULT_DEDUP_LEVEL,  # 去重档位（五档 + 关闭）
@@ -159,9 +160,25 @@ def _dedupe_similar(records: List[PhotoRecord], threshold: Optional[int]) -> Non
                     r.dup_of = keep.path
 
 
+def _is_rawish(path: str) -> bool:
+    """是否按 RAW 处理（扩展名白名单 + 文件头魔数兜底）。"""
+    return is_raw(path) or sniff_raw(path)
+
+
 def _filter_quality(records: List[PhotoRecord]) -> None:
     for r in records:
         if r.status == "rejected":
+            continue
+        if _is_rawish(r.path):
+            # RAW 不做模糊/曝光淘汰：RAW 保留完整动态范围，欠曝/夜景可后期恢复；
+            # 且全局 Laplacian 方差对夜空等暗场景系统性失灵（大片纯黑方差天然低），
+            # 内嵌预览图也可能偏黑失真。质量判断交给 AI 视觉评分——本地预处理对
+            # RAW 只做去重与分辨率校验，避免误杀摄影师的高质量源文件。
+            if not r.resolution_ok:
+                r.status = "rejected"
+                r.reject_reason = "分辨率过低"
+                continue
+            r.status = "candidate"
             continue
         if r.is_blurry:
             r.status = "rejected"
