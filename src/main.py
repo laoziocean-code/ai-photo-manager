@@ -13,6 +13,7 @@
 import os
 import sys
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -34,16 +35,38 @@ def _asset(name: str) -> str:
 
 
 def _pick_icon() -> str | None:
-    """优先 ICO（Windows 资源 / 任务栏最佳兼容性），缺失回退 PNG。"""
-    for name in ("logo.ico", "logo.png"):
+    """跨平台图标选择：macOS 优先 .icns，其余优先 .ico，缺失回退 PNG。"""
+    if sys.platform == "darwin":
+        order = ("logo.icns", "logo.png", "logo.ico")
+    else:
+        order = ("logo.ico", "logo.png", "logo.icns")
+    for name in order:
         p = _asset(name)
         if os.path.exists(p):
             return p
     return None
 
 
+def _setup_hidpi(app: QApplication):
+    """Retina / 高分屏适配（跨平台，macOS 必需）。
+
+    Qt6 默认已开启高 DPI 缩放；这里补充缩放系数取整策略，
+    避免非整数倍缩放时界面发虚或布局错位。属性不存在时静默跳过，
+    不影响旧版本运行。
+    """
+    try:
+        if hasattr(Qt, "AA_EnableHighDpiScaling"):
+            app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        if hasattr(Qt, "HighDpiScaleFactorRoundingPolicy"):
+            app.setHighDpiScaleFactorRoundingPolicy(
+                Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    except Exception:
+        pass
+
+
 def create_app(argv) -> QApplication:
     app = QApplication(argv)
+    _setup_hidpi(app)
     app.setApplicationName("AI摄影管家")
     app.setApplicationDisplayName("AI摄影管家")
     app.setOrganizationName("AIStudio")
@@ -51,7 +74,7 @@ def create_app(argv) -> QApplication:
 
     icon_path = _pick_icon()
     if icon_path:
-        # 优先 256 高清图（ICO 多尺寸会自动选）；PNG fallback Qt 用内置解码器
+        # 优先 256 高清图（ICO 多尺寸会自动选）；PNG/ICNS fallback Qt 用内置解码器
         icon = QIcon(icon_path)
         app.setWindowIcon(icon)
     app.setStyleSheet(load_stylesheet())

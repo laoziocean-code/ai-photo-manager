@@ -1,10 +1,15 @@
 """打包辅助（macOS）：调用 PyInstaller 按 build_mac.spec 生成 .app。
 
 使用：
-    python build_mac.py
+    python build_mac.py            # 仅生成 .app
+    bash package_dmg.sh            # 生成 .app 再打包成 .dmg（推荐分发用）
+    bash make_icns.sh              # 把 logo.png 转成 macOS 图标 logo.icns
 
 前置：macOS 上已 pip install -r requirements.txt 与 pyinstaller。
-产物：dist/AI摄影管家.app
+产物：dist/AI摄影管家.app （package_dmg.sh 额外产出 dist/AI摄影管家.dmg）
+
+无 Mac 也能打包？可以——本仓库提供 GitHub Actions 工作流
+（.github/workflows/build-macos.yml），在 macOS 云主机上自动产出 .dmg。
 """
 import os
 import subprocess

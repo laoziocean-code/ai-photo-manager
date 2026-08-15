@@ -1,12 +1,13 @@
 """分析页：运行分析、进度展示（含预计剩余时间）、候选/废片结果表。"""
 import os
 import subprocess
+import sys
 import time
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView, QHBoxLayout, QLabel, QMessageBox, QPushButton,
+    QAbstractItemView, QApplication, QHBoxLayout, QLabel, QMessageBox, QPushButton,
     QProgressBar, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QWidget,
 )
@@ -36,6 +37,7 @@ class AnalysisPage(QWidget):
         self._summary = None
         self._settings = SettingsManager()
         self._done_box = None
+        self._shutdown_scheduled = False
         self._ai_start = None
         self._ai_seen = 0
         self._build_ui()
@@ -165,24 +167,35 @@ class AnalysisPage(QWidget):
         shutdown = self._settings.get_auto_shutdown()
         if not notify and not shutdown:
             return
+        # 跨平台提示音：Qt 的 beep() 在 Windows/macOS/Linux 均可用
         try:
-            import winsound
-            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+            QApplication.beep()
         except Exception:
             pass
+        self._shutdown_scheduled = False
         if shutdown:
-            self._schedule_shutdown()
-        if notify or shutdown:
-            self._show_done_box(shutdown)
+            self._shutdown_scheduled = self._schedule_shutdown()
+        if notify or self._shutdown_scheduled:
+            self._show_done_box(self._shutdown_scheduled)
 
-    def _schedule_shutdown(self):
-        try:
-            subprocess.Popen([
-                "shutdown", "/s", "/t", "60",
-                "/c", "AI摄影管家：分析完成，系统将在 60 秒后关机。",
-            ])
-        except Exception:
-            pass
+    def _schedule_shutdown(self) -> bool:
+        """安排分析完成后自动关机，返回是否成功安排。
+
+        - Windows：直接调用系统 shutdown 命令（60 秒后关机）。
+        - macOS / Linux：无可靠且无侵入的等效命令（静默关机需 root 权限，
+          且容易误关用户其它工作），此处安全降级为「不执行关机」，
+          仅保留完成提醒。
+        """
+        if sys.platform.startswith("win32"):
+            try:
+                subprocess.Popen([
+                    "shutdown", "/s", "/t", "60",
+                    "/c", "AI摄影管家：分析完成，系统将在 60 秒后关机。",
+                ])
+                return True
+            except Exception:
+                return False
+        return False
 
     def _show_done_box(self, shutdown):
         n = (len(self._summary.get("tier1", [])) +
@@ -203,10 +216,11 @@ class AnalysisPage(QWidget):
         box.show()
 
     def _cancel_shutdown(self):
-        try:
-            subprocess.run(["shutdown", "/a"], timeout=10)
-        except Exception:
-            pass
+        if sys.platform.startswith("win32"):
+            try:
+                subprocess.run(["shutdown", "/a"], timeout=10)
+            except Exception:
+                pass
 
     def _record_history(self, summary):
         from src.config.models_config import get_preset

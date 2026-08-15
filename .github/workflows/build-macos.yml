@@ -1,0 +1,49 @@
+name: Build macOS (.app / .dmg)
+
+# 在 macOS 云主机上自动打包，无需你本地有 Mac。
+# - 发布 Release 时自动运行并把 .dmg 作为附件上传；
+# - 也可在 Actions 页面手动「Run workflow」触发。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Generate app icon (.icns)
+        run: bash make_icns.sh
+
+      - name: Build .app
+        run: python build_mac.py
+
+      - name: Package .dmg
+        run: bash package_dmg.sh
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/AI摄影管家.dmg
+
+      - name: Upload artifact (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI摄影管家-macOS
+          path: dist/AI摄影管家.dmg
