@@ -128,6 +128,55 @@ def test_all_image_exts_includes_raw():
     assert ".jpg" in ALL_IMAGE_EXTS
 
 
+def test_raw_exts_full_coverage():
+    """RAW 白名单应覆盖各主流厂商的全部长尾格式。"""
+    for ext in (".x3f", ".iiq", ".rwl", ".crw", ".srf", ".bay",
+                ".raf", ".orf", ".pef", ".3fr", ".fff", ".mos",
+                ".mrw", ".mef", ".erf", ".kdc", ".dcr", ".dcs",
+                ".cap", ".ari", ".r3d"):
+        assert ext in RAW_EXTS, f"缺少 RAW 扩展名: {ext}"
+
+
+# --------------------------------------------------------------------------- #
+# 内容兜底：sniff_raw 按文件头魔数判断
+# --------------------------------------------------------------------------- #
+def test_sniff_raw_tiff_le(tmp_path):
+    p = tmp_path / "odd.bin"
+    p.write_bytes(b"II*\x00" + b"\x00" * 28)
+    from src.utils.file_utils import sniff_raw
+    assert sniff_raw(str(p)) is True
+
+
+def test_sniff_raw_tiff_be(tmp_path):
+    p = tmp_path / "odd.dat"
+    p.write_bytes(b"MM\x00*" + b"\x00" * 28)
+    from src.utils.file_utils import sniff_raw
+    assert sniff_raw(str(p)) is True
+
+
+def test_sniff_raw_fuji(tmp_path):
+    p = tmp_path / "weird.xyz"
+    p.write_bytes(b"FUJIFILMCCD-RAW 0201" + b"\x00" * 12)
+    from src.utils.file_utils import sniff_raw
+    assert sniff_raw(str(p)) is True
+
+
+def test_sniff_raw_not_raw(tmp_path):
+    p = tmp_path / "plain.txt"
+    p.write_bytes(b"hello world this is not a raw file" + b"\x00" * 4)
+    from src.utils.file_utils import sniff_raw
+    assert sniff_raw(str(p)) is False
+
+
+def test_load_image_content_fallback(fake_rawpy, tmp_path):
+    """扩展名不在白名单但文件头是 TIFF 魔数 → 应走 rawpy 兜底解码。"""
+    p = tmp_path / "renamed.bin"
+    p.write_bytes(b"II*\x00" + b"\x00" * 64)  # TIFF LE 魔数
+    im = load_image(str(p))
+    assert isinstance(im, Image.Image)
+    assert im.mode == "RGB"
+
+
 # --------------------------------------------------------------------------- #
 # RAW 解码链路（mock rawpy）
 # --------------------------------------------------------------------------- #

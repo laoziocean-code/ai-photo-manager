@@ -18,7 +18,7 @@ try:
 except Exception:  # 某些环境未装 rawpy，降级处理
     rawpy = None
 
-from src.utils.file_utils import RAW_EXTS
+from src.utils.file_utils import RAW_EXTS, sniff_raw
 
 # 我们关心的 EXIF 标签 → 内部字段名（普通位图，Pillow 路径）
 _EXIF_MAP = {
@@ -97,6 +97,32 @@ def _rgb_from_raw(raw) -> Optional[np.ndarray]:
             return raw.postprocess(params=rawpy.Params(use_camera_wb=True))
         except Exception:
             return None
+
+
+def _decode_raw_to_pil(path: str) -> Optional[Image.Image]:
+    """用 rawpy 把 RAW 解码为 RGB PIL 图像；失败返回 None（不抛异常）。
+
+    供 load_image / make_thumbnail / load_gray_small 在以下两种情况复用：
+    1. 扩展名命中 RAW 白名单（主路径）；
+    2. 扩展名不在白名单但文件头魔数像 RAW（兜底路径，见 sniff_raw）。
+    """
+    if rawpy is None:
+        return None
+    raw = _raw_open(path)
+    if raw is None:
+        return None
+    try:
+        arr = _rgb_from_raw(raw)
+        if arr is not None:
+            return Image.fromarray(arr)
+        return None
+    except Exception:
+        return None
+    finally:
+        try:
+            raw.close()
+        except Exception:
+            pass
 
 
 # --------------------------------------------------------------------------- #
@@ -214,21 +240,26 @@ def _extract_exif_raw(path: str) -> Dict[str, Any]:
 # 像素加载
 # --------------------------------------------------------------------------- #
 def load_image(path: str) -> Image.Image:
-    """加载为 RGB PIL 图像（普通位图或解码后的 RAW）。"""
+    """加载为 RGB PIL 图像（普通位图或解码后的 RAW）。
+
+    兜底策略：扩展名在 RAW 白名单 → 直接走 rawpy；否则先走 Pillow，Pillow
+    打不开且文件头魔数像 RAW（sniff_raw）时，再尝试 rawpy 解码，做到
+    「扩展名被改 / 不在白名单的 RAW 也能读」。
+    """
     if is_raw(path):
-        raw = _raw_open(path)
-        if raw is not None:
-            try:
-                arr = _rgb_from_raw(raw)
-                if arr is not None:
-                    return Image.fromarray(arr)
-            finally:
-                try:
-                    raw.close()
-                except Exception:
-                    pass
+        im = _decode_raw_to_pil(path)
+        if im is not None:
+            return im
         raise ValueError(f"无法解码 RAW 文件：{path}（可能缺少 rawpy 或文件损坏）")
-    return Image.open(path).convert("RGB")
+    try:
+        return Image.open(path).convert("RGB")
+    except Exception:
+        # 内容兜底：扩展名不是 RAW 但文件头像 RAW（被改名等），尝试 rawpy
+        if sniff_raw(path):
+            im = _decode_raw_to_pil(path)
+            if im is not None:
+                return im
+        raise
 
 
 def load_gray_small(path: str, longest: int = 512) -> np.ndarray:
@@ -263,7 +294,20 @@ def load_gray_small(path: str, longest: int = 512) -> np.ndarray:
         if scale < 1.0:
             im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))))
         return np.array(im, dtype=np.uint8)
-    return _gray_pillow(path, longest)
+    # 普通位图：Pillow 优先，失败时按内容兜底尝试 rawpy
+    try:
+        return _gray_pillow(path, longest)
+    except Exception:
+        if sniff_raw(path) and rawpy is not None:
+            im = _decode_raw_to_pil(path)
+            if im is not None:
+                im = im.convert("L")
+                w, h = im.size
+                scale = min(1.0, longest / max(w, h))
+                if scale < 1.0:
+                    im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))))
+                return np.array(im, dtype=np.uint8)
+        raise
 
 
 def _gray_pillow(path: str, longest: int = 512) -> np.ndarray:
@@ -290,6 +334,9 @@ def make_thumbnail(path: str, size: int = 512) -> Optional[bytes]:
             im.convert("RGB").save(buf, format="JPEG", quality=85)
             return buf.getvalue()
     except Exception:
+        # 内容兜底：扩展名不是 RAW 但文件头像 RAW，尝试 rawpy 生成缩略图
+        if sniff_raw(path) and rawpy is not None:
+            return _thumb_raw(path, size)
         return None
 
 

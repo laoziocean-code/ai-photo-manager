@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1d1d1f" />
+  <title>AI摄影管家 · 手机版</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">📸 AI摄影管家</div>
+    <div class="subtitle">手机版</div>
+  </header>
+
+  <nav class="steps" id="steps">
+    <button class="step active" data-step="config"><span class="num">1</span>配置</button>
+    <button class="step" data-step="upload"><span class="num">2</span>上传</button>
+    <button class="step" data-step="analyze"><span class="num">3</span>分析</button>
+    <button class="step" data-step="result"><span class="num">4</span>结果</button>
+  </nav>
+
+  <main class="container">
+    <!-- 步骤 1：配置 -->
+    <section id="view-config" class="view active">
+      <div class="card">
+        <h2>视觉模型</h2>
+        <label>模型预设</label>
+        <select id="model_id"></select>
+        <label>API Key</label>
+        <div class="key-row">
+          <input type="password" id="api_key" placeholder="粘贴 API Key（本地加密保存）" autocomplete="off" />
+          <button class="btn-mini" id="toggle_key" type="button">显示</button>
+        </div>
+        <div id="key_hint" class="hint"></div>
+        <label>模型名（可覆盖，留空用预设默认）</label>
+        <input type="text" id="model_override" placeholder="如 glm-4v-flash" />
+        <label>自定义 base_url（仅自定义模型需填）</label>
+        <input type="text" id="base_url" placeholder="https://..." />
+      </div>
+      <div class="card">
+        <h2>分析参数</h2>
+        <label>精选数量（Top-N，3–50）</label>
+        <input type="number" id="top_n" min="3" max="50" value="10" />
+        <label>去重档位</label>
+        <select id="dedup_level">
+          <option value="标准">标准</option>
+          <option value="严格">严格</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="save_config">保存配置</button>
+      <div id="config_msg" class="hint"></div>
+      <button class="btn-primary ghost" id="goto_upload">下一步：上传照片</button>
+    </section>
+
+    <!-- 步骤 2：上传 -->
+    <section id="view-upload" class="view">
+      <div class="card">
+        <h2>选择照片</h2>
+        <p class="desc">支持 JPG / PNG / WEBP / TIFF / BMP 及相机 RAW（NEF / CR2 / ARW / DNG 等全部 RAW 格式）。照片仅在本机处理，分析时发送给你所选的视觉模型。</p>
+        <label class="file-drop" for="file_input">
+          <span class="file-drop-icon">📁</span>
+          <span id="file_label">点击选择照片（可多选）</span>
+        </label>
+        <input type="file" id="file_input" accept="image/*,.nef,.cr2,.cr3,.arw,.dng,.raf,.orf,.pef,.rw2,.x3f,.iiq,.rwl" multiple hidden />
+        <div id="upload_count" class="hint"></div>
+        <button class="btn-primary" id="btn_upload" disabled>上传</button>
+        <div id="upload_msg" class="hint"></div>
+      </div>
+      <div id="session_info" class="card hidden">
+        <div class="stat-row"><span>已上传</span><b id="uploaded_n">0</b> 张</div>
+        <div class="session-id">会话：<code id="session_id">-</code></div>
+      </div>
+      <button class="btn-primary" id="goto_analyze">下一步：开始分析</button>
+      <button class="btn-primary ghost" id="back_to_config">返回</button>
+    </section>
+
+    <!-- 步骤 3：分析中 -->
+    <section id="view-analyze" class="view">
+      <div class="card">
+        <h2 id="analyze_stage">本地预处理中</h2>
+        <div class="progress-wrap">
+          <div class="progress-bar" id="progress_bar"></div>
+        </div>
+        <div class="progress-text"><span id="progress_cur">0</span> / <span id="progress_total">0</span></div>
+        <div id="progress_msg" class="hint"></div>
+      </div>
+      <button class="btn-primary ghost hidden" id="goto_result">查看结果</button>
+      <button class="btn-primary ghost" id="back_to_upload">返回</button>
+    </section>
+
+    <!-- 步骤 4：结果 -->
+    <section id="view-result" class="view">
+      <div id="result_summary" class="card hidden"></div>
+      <div class="card">
+        <div class="result-actions">
+          <button class="btn-primary" id="btn_report">查看完整报告</button>
+          <button class="btn-primary ghost" id="btn_selected">下载精选原图</button>
+        </div>
+      </div>
+      <h3 class="section-title">✨ AI 精选 <span id="t1_count" class="badge"></span></h3>
+      <div id="tier1_list"></div>
+      <h3 class="section-title hidden">👍 良好 <span id="t2_count" class="badge"></span></h3>
+      <div id="tier2_list" class="hidden"></div>
+      <h3 class="section-title hidden">📷 普通 <span id="t3_count" class="badge"></span></h3>
+      <div id="tier3_list" class="hidden"></div>
+      <h3 class="section-title hidden">🗑 废片 <span id="rj_count" class="badge"></span></h3>
+      <div id="rejected_list" class="hidden"></div>
+      <button class="btn-primary ghost" id="restart">重新分析一批</button>
+    </section>
+  </main>
+
+  <footer class="footer">AI摄影管家 · 手机版 · 本地预处理 + AI 视觉评分</footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>
