@@ -14,9 +14,10 @@ except Exception:  # 打包/测试环境可能尚未安装 cv2
 
 
 def blur_score(path: str) -> float:
-    """返回 Laplacian 方差；读取/处理失败返回 0.0（会被判为模糊）。
+    """返回 Laplacian 方差；数值越高越清晰。
 
-    像素加载统一走 image_io.load_gray_small，RAW（NEF 等）也能正确判模糊。
+    读取/处理失败返回 999.0（视为「无法评估」，不判为模糊），避免个别
+    RAW 缩略图/解码异常时把好照片误杀；真正失焦的图方差依然很低，照常淘汰。
     """
     try:
         arr = load_gray_small(path)
@@ -29,7 +30,7 @@ def blur_score(path: str) -> float:
         lap = cv2.Laplacian(arr, cv2.CV_64F)
         return float(lap.var())
     except Exception:
-        return 0.0
+        return 999.0
 
 
 def is_blurry(path: str, threshold: float = 80.0) -> bool:

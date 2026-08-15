@@ -10,6 +10,7 @@
 去重按档位（dedup_level）控制相似判重阈值，被去重的照片记录
 dup_group/dup_of 归属，可用 collect_dedup_groups 汇总成报告用结构。
 """
+import os
 from typing import Dict, List, Optional, Sequence
 
 from src.core.image_io import ImageMeta, extract_exif
@@ -36,11 +37,21 @@ def _best(recs: List[PhotoRecord]) -> PhotoRecord:
     return max(recs, key=lambda r: (r.blur if not r.is_blurry else -1))
 
 
-def filter_photos(paths: Sequence[str], options: Optional[Dict] = None):
+def filter_photos(paths: Sequence[str], options: Optional[Dict] = None,
+                  on_progress=None):
+    """本地预处理，返回 (candidates, rejected)。
+
+    on_progress(stage, cur, total, msg)：逐文件回调，stage 恒为 "preprocess"，
+    便于界面显示实时进度与预计剩余时间（RAW 批量预处理可能较耗时）。
+    """
     opts = {**DEFAULT_OPTIONS, **(options or {})}
     records: List[PhotoRecord] = []
+    n = len(paths)
 
-    for p in paths:
+    for idx, p in enumerate(paths):
+        if on_progress:
+            on_progress("preprocess", idx, n,
+                        f"预处理 {idx + 1}/{n}：{os.path.basename(p)}")
         try:
             meta_raw = extract_exif(p)
             rec = PhotoRecord(
@@ -60,11 +71,16 @@ def filter_photos(paths: Sequence[str], options: Optional[Dict] = None):
             rec.is_blurry = rec.blur < float(opts["blur_threshold"])
             rec.exposure = exposure_stats(p)
             w, h = rec.meta.width, rec.meta.height
-            mp = (w * h) / 1_000_000 if w and h else 0
-            min_side = min(w, h) if w and h else 0
-            rec.resolution_ok = (mp >= float(opts["min_megapixels"])) and (
-                min_side >= int(opts["min_dimension"])
-            )
+            if w and h:
+                mp = (w * h) / 1_000_000
+                min_side = min(w, h)
+                rec.resolution_ok = (mp >= float(opts["min_megapixels"])) and (
+                    min_side >= int(opts["min_dimension"])
+                )
+            else:
+                # 尺寸未知（EXIF 与解码都取不到，常见于个别 RAW）：不做分辨率
+                # 淘汰，避免好照片被误杀；真读不出的文件会在后续阶段暴露错误。
+                rec.resolution_ok = True
             records.append(rec)
         except Exception as e:
             rec = PhotoRecord(path=p)

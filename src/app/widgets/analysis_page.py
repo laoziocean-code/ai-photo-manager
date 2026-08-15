@@ -30,6 +30,18 @@ def _fmt_eta(seconds: float) -> str:
     return f"约 {h} 时 {m} 分"
 
 
+def _fmt_duration(seconds: float) -> str:
+    """把耗时秒数格式化成「X 分 Y 秒 / X 时 Y 分」。"""
+    s = int(round(seconds))
+    if s < 60:
+        return f"{s} 秒"
+    m, sec = divmod(s, 60)
+    if m < 60:
+        return f"{m} 分 {sec} 秒"
+    h, m = divmod(m, 60)
+    return f"{h} 时 {m} 分"
+
+
 class AnalysisPage(QWidget):
     def __init__(self):
         super().__init__()
@@ -38,8 +50,8 @@ class AnalysisPage(QWidget):
         self._settings = SettingsManager()
         self._done_box = None
         self._shutdown_scheduled = False
-        self._ai_start = None
-        self._ai_seen = 0
+        self._stage = None
+        self._stage_start = None
         self._build_ui()
 
     def _build_ui(self):
@@ -106,8 +118,8 @@ class AnalysisPage(QWidget):
     def start(self, model_id, api_key, input_dir, output_dir, top_n, model_override="",
               options=None):
         self._summary = None
-        self._ai_start = None
-        self._ai_seen = 0
+        self._stage = None
+        self._stage_start = None
         self._tabs.setVisible(False)
         self._progress.setValue(0)
         self._status.setText("准备中…")
@@ -129,17 +141,17 @@ class AnalysisPage(QWidget):
     def _on_progress(self, stage, cur, total, msg):
         pct = int(cur / total * 100) if total else 0
         self._progress.setValue(pct)
-        if stage == "ai":
-            now = time.time()
-            if self._ai_start is None:
-                self._ai_start = now
-            self._ai_seen = max(self._ai_seen, cur)
-            elapsed = now - self._ai_start
-            remain = total - cur
-            if cur > 0 and elapsed > 0 and remain > 0:
-                eta = elapsed / cur * remain
-                self._status.setText(f"{msg} · 预计剩余 {_fmt_eta(eta)}")
-                return
+        now = time.time()
+        if stage != self._stage:
+            self._stage = stage
+            self._stage_start = now
+        elapsed = now - (self._stage_start or now)
+        remain = total - cur
+        # 预处理/AI 两阶段均显示预计剩余时间（预处理含 RAW 解码，可能较慢）
+        if stage in ("preprocess", "ai") and cur > 0 and elapsed > 1.0 and remain > 0:
+            eta = elapsed / cur * remain
+            self._status.setText(f"{msg} · 预计剩余 {_fmt_eta(eta)}")
+            return
         self._status.setText(msg)
 
     def _on_error(self, msg):
@@ -150,7 +162,16 @@ class AnalysisPage(QWidget):
         self._summary = summary
         self._btn_stop.setEnabled(False)
         self._progress.setValue(100)
-        self._status.setText("完成 ✅")
+        # 完成状态附带统计：耗时 / Token / 节省人工时间
+        parts = []
+        if summary.get("duration_sec"):
+            parts.append(f"耗时 {_fmt_duration(summary['duration_sec'])}")
+        tokens = summary.get("tokens") or {}
+        if tokens.get("total"):
+            parts.append(f"Token {tokens['total']}")
+        if summary.get("saved_time"):
+            parts.append(f"节省人工 {summary['saved_time']}")
+        self._status.setText("完成 ✅" + (" · " + " · ".join(parts) if parts else ""))
         self._populate(summary)
         self._tabs.setVisible(True)
         self._btn_report.setEnabled(True)

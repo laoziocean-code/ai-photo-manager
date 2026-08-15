@@ -52,6 +52,7 @@ class _FakeRaw:
     def __init__(self, arr=None, thumb=None):
         self._arr = arr if arr is not None else _make_rgb(128, 160)
         self._thumb = thumb  # bytes(JPEG) 或 None
+        self.sizes = (120, 160)  # (height, width)，与 _make_rgb(120,160) 一致
         self.closed = False
 
     def postprocess(self, *a, **k):
@@ -246,7 +247,7 @@ def test_extract_exif_raw(fake_exifread, fake_rawpy, tmp_path):
 
 
 def test_extract_exif_raw_dims_fallback(fake_rawpy, tmp_path, monkeypatch):
-    """exifread 取不到尺寸时，应回退到 rawpy 解码尺寸。"""
+    """exifread 取不到尺寸时，应回退到 rawpy 头信息（raw.sizes，零解码开销）。"""
 
     def _process_no_dims(fh, details=False, strict=True):
         return {
@@ -260,7 +261,7 @@ def test_extract_exif_raw_dims_fallback(fake_rawpy, tmp_path, monkeypatch):
     p = tmp_path / "x.nef"
     p.write_bytes(b"FAKE_NEF_BYTES")
     meta = extract_exif(str(p))
-    # _FakeRaw.postprocess 返回 120x160 → width=160, height=120
+    # _FakeRaw.sizes=(120,160) → width=160, height=120
     assert meta["width"] == 160
     assert meta["height"] == 120
 

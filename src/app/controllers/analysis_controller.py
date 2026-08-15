@@ -33,6 +33,21 @@ from src.utils.logger import get_logger
 
 logger = get_logger("analysis")
 
+# 估算「节省的人工时间」基准：人工逐张浏览+评分+筛选一张照片的耗时（秒）
+_SECONDS_PER_PHOTO = 30
+
+
+def _fmt_duration(seconds: float) -> str:
+    """把秒数格式化为「X 分 Y 秒 / X 时 Y 分」等人类可读串。"""
+    s = int(round(seconds))
+    if s < 60:
+        return f"{s} 秒"
+    m, sec = divmod(s, 60)
+    if m < 60:
+        return f"{m} 分 {sec} 秒"
+    h, m = divmod(m, 60)
+    return f"{h} 时 {m} 分"
+
 
 def _split_tiers(results, top_n: int):
     """把全部 candidate 按分数拆成 三档。
@@ -59,12 +74,17 @@ class AnalysisController:
 
     def run(self, image_paths, model_id, api_key, output_dir, top_n=10,
             options=None, model_override="", on_progress=None, on_done=None):
+        t_start = time.monotonic()
+
         def progress(stage, cur, total, msg=""):
             if on_progress:
                 on_progress(stage, cur, total, msg)
 
         progress("preprocess", 0, len(image_paths), "本地预处理中（去重/相似/模糊/曝光/分辨率）…")
-        candidates, rejected = filter_photos(image_paths, options)
+        candidates, rejected = filter_photos(
+            image_paths, options,
+            on_progress=lambda s, c, t, m: progress(s, c, t, m),
+        )
         dedup_groups = collect_dedup_groups(rejected)
         dedup_count = sum(len(g["similar"]) for g in dedup_groups)
         dedup_level = (options or {}).get("dedup_level", DEFAULT_DEDUP_LEVEL)
@@ -77,6 +97,8 @@ class AnalysisController:
         prompt = scoring_prompt()
         results = []
         total = len(candidates)
+        token_input = 0
+        token_output = 0
         for i, rec in enumerate(candidates):
             if self._stop:
                 break
@@ -84,11 +106,19 @@ class AnalysisController:
             try:
                 rec.ai = model.analyze(rec.path, prompt)
                 rec.total_score = compute_total(rec.ai.get("scores", {}))
+                usage = getattr(model, "usage", None) or {}
+                token_input += int(usage.get("input_tokens", 0) or 0)
+                token_output += int(usage.get("output_tokens", 0) or 0)
             except Exception as e:
                 logger.error(f"AI 分析失败 {rec.path}: {e}")
                 rec.ai = {}
                 rec.total_score = 0.0
             results.append(rec)
+
+        duration_sec = max(0.0, time.monotonic() - t_start)
+        token_total = token_input + token_output
+        ai_count = len(results)
+        saved_sec = int(len(image_paths) * _SECONDS_PER_PHOTO)
 
         tier1, tier2, tier3 = _split_tiers(results, top_n)
         progress("export", 0, 1, "导出精选原图与生成报告…")
@@ -102,6 +132,16 @@ class AnalysisController:
             "tier2_count": len(tier2),
             "tier3_count": len(tier3),
             "avg_score": avg,
+            "duration_sec": round(duration_sec, 1),
+            "duration_text": _fmt_duration(duration_sec),
+            "ai_count": ai_count,
+            "tokens": {
+                "input_tokens": token_input,
+                "output_tokens": token_output,
+                "total": token_total,
+            },
+            "saved_sec": saved_sec,
+            "saved_time": _fmt_duration(saved_sec),
             "dedup_level": dedup_level,
             "dedup_count": dedup_count,
             "dedup_groups": dedup_groups,
@@ -123,6 +163,16 @@ class AnalysisController:
                 "dedup_level": dedup_level,
                 "dedup_count": dedup_count,
                 "dedup_groups": dedup_groups,
+                "duration_sec": round(duration_sec, 1),
+                "duration_text": _fmt_duration(duration_sec),
+                "ai_count": ai_count,
+                "tokens": {
+                    "input_tokens": token_input,
+                    "output_tokens": token_output,
+                    "total": token_total,
+                },
+                "saved_sec": saved_sec,
+                "saved_time": _fmt_duration(saved_sec),
             })
 
 

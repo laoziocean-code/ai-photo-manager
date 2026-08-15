@@ -200,7 +200,9 @@ def _extract_exif_raw(path: str) -> Dict[str, Any]:
     try:
         import exifread
         with open(path, "rb") as fh:
-            tags = exifread.process_file(fh, details=False, strict=True)
+            # strict=False：不少 RAW 的 EXIF 存在轻微不规范字段（GPS/厂商扩展等），
+            # 宽容解析可避免整段标签解析失败而丢失尺寸/拍摄参数。
+            tags = exifread.process_file(fh, details=False, strict=False)
         for src, dst, kind in _EXIFREAD_MAP:
             v = _exifread_num(tags.get(src), kind)
             if v is not None:
@@ -211,13 +213,18 @@ def _extract_exif_raw(path: str) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # 尺寸回退：exifread 取不到时用 rawpy 解码一帧（开销较大，仅兜底）
+    # 尺寸回退：exifread 取不到时用 rawpy 头信息（raw.sizes，只读文件头，
+    # 零解码开销）；个别 rawpy 版本无 sizes 属性时再退到解码一帧。
     if not w or not h:
         raw = _raw_open(path)
         if raw is not None:
             try:
-                arr = raw.postprocess()
-                h, w = arr.shape[:2]
+                sz = getattr(raw, "sizes", None)
+                if sz:
+                    h, w = int(sz[0]), int(sz[1])
+                else:
+                    arr = raw.postprocess()
+                    h, w = arr.shape[:2]
             except Exception:
                 pass
             try:
@@ -262,10 +269,21 @@ def load_image(path: str) -> Image.Image:
         raise
 
 
+def _pil_to_gray(im: Image.Image, longest: int) -> np.ndarray:
+    """把 PIL 图像转成灰度小图数组（最长边 <= longest）。"""
+    im = im.convert("L")
+    w, h = im.size
+    scale = min(1.0, longest / max(w, h))
+    if scale < 1.0:
+        im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))))
+    return np.array(im, dtype=np.uint8)
+
+
 def load_gray_small(path: str, longest: int = 512) -> np.ndarray:
     """统一加载灰度小图（最长边 <= longest），供模糊/曝光检测使用。
 
-    RAW 优先用内嵌 JPEG 缩略图（极快），缺失时降级到解码。
+    RAW 优先用内嵌 JPEG 缩略图（极快）；内嵌图缺失或太小时（最长边 < 256px，
+    会导致 Laplacian 方差系统性偏低，把清晰照片误判为模糊）降级到解码。
     """
     if is_raw(path) and rawpy is not None:
         raw = _raw_open(path)
@@ -274,8 +292,10 @@ def load_gray_small(path: str, longest: int = 512) -> np.ndarray:
             try:
                 thumb = raw.extract_thumb()
                 if thumb is not None and getattr(thumb, "format", None) == rawpy.ThumbFormat.JPEG:
-                    im = Image.open(BytesIO(thumb.data))
-                else:
+                    with Image.open(BytesIO(thumb.data)) as t:
+                        if max(t.size) >= 256:
+                            im = t.convert("RGB")
+                if im is None:
                     arr = _rgb_from_raw(raw)
                     if arr is not None:
                         im = Image.fromarray(arr)
@@ -286,14 +306,10 @@ def load_gray_small(path: str, longest: int = 512) -> np.ndarray:
                     raw.close()
                 except Exception:
                     pass
-        if im is None:
-            return _gray_pillow(path, longest)
-        im = im.convert("L")
-        w, h = im.size
-        scale = min(1.0, longest / max(w, h))
-        if scale < 1.0:
-            im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))))
-        return np.array(im, dtype=np.uint8)
+        if im is not None:
+            return _pil_to_gray(im, longest)
+        # 内嵌图缺失且解码失败：按普通位图路径再试（通常抛错）
+        return _gray_pillow(path, longest)
     # 普通位图：Pillow 优先，失败时按内容兜底尝试 rawpy
     try:
         return _gray_pillow(path, longest)
@@ -301,12 +317,7 @@ def load_gray_small(path: str, longest: int = 512) -> np.ndarray:
         if sniff_raw(path) and rawpy is not None:
             im = _decode_raw_to_pil(path)
             if im is not None:
-                im = im.convert("L")
-                w, h = im.size
-                scale = min(1.0, longest / max(w, h))
-                if scale < 1.0:
-                    im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))))
-                return np.array(im, dtype=np.uint8)
+                return _pil_to_gray(im, longest)
         raise
 
 
@@ -348,11 +359,13 @@ def _thumb_raw(path: str, size: int = 512) -> Optional[bytes]:
         thumb = raw.extract_thumb()
         if thumb is not None and getattr(thumb, "format", None) == rawpy.ThumbFormat.JPEG:
             with Image.open(BytesIO(thumb.data)) as im:
-                im.thumbnail((size, size))
-                buf = BytesIO()
-                im.convert("RGB").save(buf, format="JPEG", quality=85)
-                return buf.getvalue()
-        # 无内嵌缩略图：解码后缩放
+                # 内嵌图太小（<256px）时放大显示会糊，降级解码
+                if max(im.size) >= 256:
+                    im.thumbnail((size, size))
+                    buf = BytesIO()
+                    im.convert("RGB").save(buf, format="JPEG", quality=85)
+                    return buf.getvalue()
+        # 无内嵌缩略图 / 太小：解码后缩放
         arr = _rgb_from_raw(raw)
         if arr is None:
             return None

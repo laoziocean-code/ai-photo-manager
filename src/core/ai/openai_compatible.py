@@ -18,6 +18,12 @@ class OpenAICompatibleModel:
         if base_url:
             kwargs["base_url"] = base_url
         self.client = OpenAI(**kwargs)
+        self._usage = {"input_tokens": 0, "output_tokens": 0}
+
+    @property
+    def usage(self) -> Dict[str, int]:
+        """累计 token 用量（跨多次调用累加），供报告统计。"""
+        return dict(self._usage)
 
     def _data_url(self, path: str) -> str:
         # 统一解码为 JPEG（RAW/NEF 无法直接被视觉模型读取）
@@ -37,4 +43,11 @@ class OpenAICompatibleModel:
             max_tokens=2000,
             temperature=0.4,
         )
+        try:
+            u = resp.usage
+            if u is not None:
+                self._usage["input_tokens"] += int(getattr(u, "prompt_tokens", 0) or 0)
+                self._usage["output_tokens"] += int(getattr(u, "completion_tokens", 0) or 0)
+        except Exception:
+            pass
         return parse_analysis(resp.choices[0].message.content)

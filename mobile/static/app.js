@@ -254,12 +254,27 @@ function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 }
 
+function fmtDuration(sec) {
+  sec = Math.round(Number(sec) || 0);
+  if (sec < 60) return sec + " 秒";
+  const m = Math.floor(sec / 60), s = sec % 60;
+  if (m < 60) return m + " 分 " + s + " 秒";
+  const h = Math.floor(m / 60);
+  return h + " 时 " + (m % 60) + " 分";
+}
+
 async function loadResult() {
   if (!TASK_ID) return;
   try {
     const r = await fetch("/api/result/" + TASK_ID);
     const j = await r.json();
     if (j.error) { alert(j.error); return; }
+    const tk = j.tokens || {};
+    const statLine = [
+      j.duration_text ? "耗时 " + j.duration_text : "",
+      tk.total ? "Token " + tk.total : "",
+      j.saved_time ? "节省人工 " + j.saved_time : "",
+    ].filter(Boolean).join(" · ");
     $("result_summary").classList.remove("hidden");
     $("result_summary").innerHTML = `
       <div class="summary-grid">
@@ -268,7 +283,8 @@ async function loadResult() {
         <div class="cell"><div class="v">${j.tier2_count}</div><div class="k">良好</div></div>
         <div class="cell"><div class="v">${j.rejected_count}</div><div class="k">废片/去重</div></div>
       </div>
-      <div class="hint" style="margin-top:10px">去重档位：${j.dedup_level} · 去重 ${j.dedup_count} 张</div>`;
+      ${statLine ? `<div class="hint" style="margin-top:10px">${statLine}</div>` : ""}
+      <div class="hint" style="margin-top:6px">去重档位：${j.dedup_level} · 去重 ${j.dedup_count} 张</div>`;
 
     $("t1_count").textContent = j.tier1.length;
     $("tier1_list").innerHTML = j.tier1.map(photoCardHTML).join("");

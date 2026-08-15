@@ -72,9 +72,10 @@
 <body>
   <header>
     <h1>AI摄影管家 · 摄影报告</h1>
-    <p>分析时间：{{ analysis_time }} · 共分析 {{ total }} 张</p>
+    <p>分析时间：{{ analysis_time }} · 共扫描 {{ total }} 张{% if ai_count %} · AI 评分 {{ ai_count }} 张{% endif %}</p>
     <div class="stats">
-      <div class="stat"><b>{{ total }}</b><span>分析照片</span></div>
+      <div class="stat"><b>{{ total }}</b><span>扫描照片</span></div>
+      {% if ai_count %}<div class="stat"><b>{{ ai_count }}</b><span>AI 评分</span></div>{% endif %}
       <div class="stat"><b>{{ tier1|length }}</b><span>精选</span></div>
       <div class="stat"><b>{{ tier2_count }}</b><span>良好</span></div>
       <div class="stat"><b>{{ tier3_count }}</b><span>普通</span></div>
@@ -83,6 +84,9 @@
       {% if dedup_count %}
       <div class="stat"><b>{{ dedup_count }}</b><span>自动去重</span></div>
       {% endif %}
+      {% if duration_text %}<div class="stat"><b>{{ duration_text }}</b><span>分析耗时</span></div>{% endif %}
+      {% if tokens and tokens.total %}<div class="stat"><b>{{ tokens.total }}</b><span>Token 消耗</span></div>{% endif %}
+      {% if saved_time %}<div class="stat"><b>{{ saved_time }}</b><span>节省人工时间</span></div>{% endif %}
     </div>
   </header>
 
@@ -144,6 +148,6 @@
   </section>
   {% endif %}
 
-  <footer>由 AI摄影管家生成 · 仅供摄影参考</footer>
+  <footer>由 AI摄影管家生成 · 仅供摄影参考{% if saved_sec %} · 「节省人工时间」按每张照片约 30 秒人工评分筛选估算{% endif %}</footer>
 </body>
 </html>

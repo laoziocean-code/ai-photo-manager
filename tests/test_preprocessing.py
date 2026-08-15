@@ -95,6 +95,32 @@ def test_filter_keeps_good_image(tmpdir):
     assert len(cands) == 1 and cands[0].status == "candidate"
 
 
+def test_filter_progress_callback(tmpdir):
+    """预处理逐文件回调：应收到 preprocess 阶段进度（含文件名）。"""
+    p1 = os.path.join(tmpdir, "a.jpg")
+    p2 = os.path.join(tmpdir, "b.jpg")
+    _make_image(p1, size=(2000, 1300), noise=True)
+    _make_image(p2, size=(2000, 1300), noise=True)
+    calls = []
+    filter_photos([p1, p2], on_progress=lambda s, c, t, m: calls.append((s, c, t, m)))
+    assert len(calls) == 2
+    assert all(s == "preprocess" for s, _, _, _ in calls)
+    assert [c for _, c, _, _ in calls] == [0, 1]
+    assert all(t == 2 for _, _, t, _ in calls)
+
+
+def test_filter_unknown_dims_not_rejected(tmpdir, monkeypatch):
+    """EXIF 取不到尺寸（个别 RAW 场景）时不应按「分辨率过低」淘汰。"""
+    p = os.path.join(tmpdir, "no_dims.jpg")
+    _make_image(p, size=(2000, 1300), noise=True)
+
+    import src.core.preprocessing.quality_filter as qf
+    monkeypatch.setattr(qf, "extract_exif",
+                        lambda path: {"width": 0, "height": 0, "size_bytes": 1})
+    cands, rej = filter_photos([p])
+    assert len(cands) == 1 and len(rej) == 0
+
+
 # ---------- 五档去重 + collect_dedup_groups ----------
 def test_dedup_levels_has_5_strengths_and_off():
     strengths = [k for k, v in DEDUP_LEVELS.items() if v is not None]

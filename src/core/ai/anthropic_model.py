@@ -18,6 +18,12 @@ class AnthropicModel:
         if base_url:
             kwargs["base_url"] = base_url
         self.client = Anthropic(**kwargs)
+        self._usage = {"input_tokens": 0, "output_tokens": 0}
+
+    @property
+    def usage(self) -> Dict[str, int]:
+        """累计 token 用量（跨多次调用累加），供报告统计。"""
+        return dict(self._usage)
 
     def _source(self, path: str) -> Dict[str, Any]:
         # 统一解码为 JPEG（RAW/NEF 无法直接被视觉模型读取）
@@ -40,5 +46,12 @@ class AnthropicModel:
                 ],
             }],
         )
+        try:
+            u = resp.usage
+            if u is not None:
+                self._usage["input_tokens"] += int(getattr(u, "input_tokens", 0) or 0)
+                self._usage["output_tokens"] += int(getattr(u, "output_tokens", 0) or 0)
+        except Exception:
+            pass
         text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
         return parse_analysis(text)

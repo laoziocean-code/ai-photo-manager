@@ -22,8 +22,13 @@ from src.core.ai.response_parser import parse_analysis
 
 
 class FakeModel:
+    def __init__(self):
+        self._usage = {"input_tokens": 0, "output_tokens": 0}
+
     def analyze(self, image_path, prompt):
         # 直接返回已解析结构，模拟一次成功的视觉模型调用
+        self._usage["input_tokens"] += 120
+        self._usage["output_tokens"] += 60
         raw = (
             '{"scores":{"composition":82,"lighting":78,"color":70,"sharpness":88,'
             '"subject":80,"emotion":75,"story":66,"publish_value":85},'
@@ -36,6 +41,10 @@ class FakeModel:
             '"background":"干净","skin":"通透"}}'
         )
         return parse_analysis(raw)
+
+    @property
+    def usage(self) -> dict:
+        return dict(self._usage)
 
 
 def _make_image(path, size=(2000, 1300), color=(120, 120, 120), noise=False):
@@ -90,6 +99,13 @@ def test_pipeline_end_to_end(workdir, monkeypatch):
     # 精选 + 三档总计
     assert len(tier1) + len(tier2) + len(tier3) >= 1
     assert len(tier1) >= 1
+    # 统计信息：耗时 / AI 评分数 / Token / 节省人工时间
+    assert summary.get("duration_sec", 0) >= 0
+    assert summary.get("ai_count", 0) >= 1
+    tokens = summary.get("tokens") or {}
+    assert tokens.get("total", 0) >= 180  # 每张 120+60
+    assert summary.get("saved_sec", 0) > 0
+    assert summary.get("saved_time", "") != ""
     # 精选导出与报告
     assert os.path.isdir(os.path.join(out, "AI精选"))
     # 不再生成 xlsx 清单
@@ -98,3 +114,6 @@ def test_pipeline_end_to_end(workdir, monkeypatch):
     assert os.path.exists(report)
     html = open(report, encoding="utf-8").read()
     assert "good.jpg" in html and "data:image/jpeg;base64" in html
+    # 报告含统计信息
+    assert "Token 消耗" in html
+    assert "节省人工时间" in html
