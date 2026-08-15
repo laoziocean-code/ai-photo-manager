@@ -17,8 +17,21 @@
 - 不含 Windows 专有的 version_info.txt / OpenSSL DLL 修复逻辑。
 """
 import os
+import sys
 
-APP_DIR = os.path.dirname(os.path.realpath(__file__))
+
+def _app_dir():
+    """兼容 `pyinstaller x.spec` 与 `python -m PyInstaller x.spec` 两种调用。"""
+    try:
+        return os.path.dirname(os.path.realpath(__file__))
+    except NameError:
+        for a in sys.argv:
+            if a.endswith(".spec"):
+                return os.path.dirname(os.path.realpath(a))
+        return os.getcwd()
+
+
+APP_DIR = _app_dir()
 
 
 def _collect_rawpy_libs():
