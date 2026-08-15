@@ -48,6 +48,19 @@
     .section .label { font-size:12px; color:var(--accent); letter-spacing:1px; font-weight:600; }
     .section p { color:var(--text); font-size:13px; line-height:1.7; margin:4px 0 0;
                  white-space:pre-wrap; }
+    /* Lightroom 参数框 */
+    .lr-box { background:var(--soft); border:1px solid var(--line); border-radius:10px;
+              padding:12px 14px; margin-top:8px; }
+    .lr-row { display:flex; justify-content:space-between; align-items:center;
+              padding:5px 0; border-bottom:1px dashed var(--line); font-size:13px; }
+    .lr-row:last-of-type { border-bottom:none; }
+    .lr-k { color:var(--muted); }
+    .lr-v { color:var(--accent2); font-weight:700; font-variant-numeric:tabular-nums; }
+    .lr-copy { margin-top:10px; background:var(--accent); color:#fff; border:none;
+               border-radius:8px; padding:6px 14px; font-size:12px; cursor:pointer;
+               font-family:inherit; }
+    .lr-copy:hover { background:var(--accent2); }
+    .lr-note { margin-top:8px; color:var(--muted); font-size:12px; line-height:1.6; }
     .exif { margin-top:10px; font-size:11px; color:var(--muted); display:flex; flex-wrap:wrap; gap:6px; }
     .exif span { background:var(--soft); border:1px solid var(--line); border-radius:6px; padding:2px 7px; }
     /* 等级徽章 */
@@ -149,5 +162,30 @@
   {% endif %}
 
   <footer>由 AI摄影管家生成 · 仅供摄影参考{% if saved_sec %} · 「节省人工时间」按每张照片约 30 秒人工评分筛选估算{% endif %}</footer>
+  <script>
+  function copyLr(btn) {
+    var txt = btn.getAttribute('data-lr') || '';
+    function done() {
+      var o = btn.textContent;
+      btn.textContent = '✓ 已复制';
+      setTimeout(function () { btn.textContent = o; }, 1200);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done, function () { fallback(); });
+    } else {
+      fallback();
+    }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+  }
+  </script>
 </body>
 </html>

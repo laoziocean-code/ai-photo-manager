@@ -367,7 +367,7 @@ def api_selected_zip(task_id):
         if not t:
             abort(404)
         output_dir = t["output_dir"]
-    selected_dir = os.path.join(output_dir, "AI精选")
+    selected_dir = os.path.join(output_dir, "精选")
     if not os.path.isdir(selected_dir):
         return jsonify({"files": []})
     files = []
@@ -385,8 +385,8 @@ def api_download(task_id, filename):
         if not t:
             abort(404)
         output_dir = t["output_dir"]
-    # 仅允许从 AI精选/ 目录下载，防路径穿越
-    selected_dir = os.path.join(output_dir, "AI精选")
+    # 仅允许从 精选/ 目录下载，防路径穿越
+    selected_dir = os.path.join(output_dir, "精选")
     safe = os.path.basename(filename)
     p = os.path.join(selected_dir, safe)
     if not os.path.isfile(p):

@@ -97,7 +97,7 @@ class AnalysisPage(QWidget):
         self._btn_report.setObjectName("primaryBtn")
         self._btn_report.setEnabled(False)
         self._btn_report.clicked.connect(self._open_report)
-        self._btn_folder = QPushButton("打开精选文件夹")
+        self._btn_folder = QPushButton("打开输出文件夹")
         self._btn_folder.setEnabled(False)
         self._btn_folder.clicked.connect(self._open_folder)
         act = QHBoxLayout()
@@ -157,6 +157,7 @@ class AnalysisPage(QWidget):
     def _on_error(self, msg):
         self._status.setText("错误：" + msg)
         self._btn_stop.setEnabled(False)
+        self._notify_analyzing(False)
 
     def _on_finished(self, summary):
         self._summary = summary
@@ -177,10 +178,16 @@ class AnalysisPage(QWidget):
         self._btn_report.setEnabled(True)
         self._btn_folder.setEnabled(True)
         self._record_history(summary)
+        self._notify_analyzing(False)
         mw = self.window()
         if hasattr(mw, "set_summary"):
             mw.set_summary(summary)
         self._notify_complete(summary)
+
+    def _notify_analyzing(self, busy: bool):
+        mw = self.window()
+        if hasattr(mw, "set_analyzing"):
+            mw.set_analyzing(busy)
 
     # ---- 完成提醒（弹窗 + 声音）与自动关机 ----
     def _notify_complete(self, summary):
@@ -336,6 +343,6 @@ class AnalysisPage(QWidget):
     def _open_folder(self):
         if not self._summary:
             return
-        d = os.path.join(self._summary["output_dir"], "AI精选")
+        d = self._summary["output_dir"]
         if os.path.isdir(d):
             QDesktopServices.openUrl(QUrl.fromLocalFile(d))

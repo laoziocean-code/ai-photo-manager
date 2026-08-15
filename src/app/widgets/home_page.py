@@ -9,6 +9,7 @@ import time
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QHBoxLayout,
@@ -138,6 +139,23 @@ class HomePage(QWidget):
         row_out.addWidget(btn_out)
         root.addLayout(row_out)
 
+        # ---- 归档 / 重命名开关 ----
+        row_opts = QHBoxLayout()
+        self._cb_archive = QCheckBox("归档全部照片（精选/普通/废片/去重）")
+        self._cb_archive.setChecked(self._settings.get_archive_all())
+        self._cb_archive.toggled.connect(self._settings.set_archive_all)
+        self._cb_structure = QCheckBox("保留原文件夹结构")
+        self._cb_structure.setChecked(self._settings.get_keep_structure())
+        self._cb_structure.toggled.connect(self._settings.set_keep_structure)
+        self._cb_rename = QCheckBox("自动重命名（特质-拍摄时间）")
+        self._cb_rename.setChecked(self._settings.get_auto_rename())
+        self._cb_rename.toggled.connect(self._settings.set_auto_rename)
+        row_opts.addWidget(self._cb_archive)
+        row_opts.addWidget(self._cb_structure)
+        row_opts.addWidget(self._cb_rename)
+        row_opts.addStretch(1)
+        root.addLayout(row_opts)
+
         root.addStretch(1)
 
         bottom = QHBoxLayout()
@@ -145,11 +163,15 @@ class HomePage(QWidget):
         self._model_status = QLabel("模型 · 检测中…", objectName="modelStatus")
         self._model_status.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         bottom.addWidget(self._model_status)
-        start = QPushButton("开始分析")
-        start.setObjectName("primaryBtn")
-        start.clicked.connect(self._on_start)
-        bottom.addWidget(start)
+        self._start_btn = QPushButton("开始分析")
+        self._start_btn.setObjectName("primaryBtn")
+        self._start_btn.clicked.connect(self._on_start)
+        bottom.addWidget(self._start_btn)
         root.addLayout(bottom)
+
+    def set_analyzing(self, busy: bool):
+        """分析进行中禁用「开始分析」按钮（禁用态自动显示为灰色）。"""
+        self._start_btn.setEnabled(not busy)
 
     # ---- 设置 / 模型状态 ----
     def _open_settings(self):
@@ -265,7 +287,12 @@ class HomePage(QWidget):
         model_id = self._settings.get_model_id()
         model_override = self._settings.get_model_override()
         top_n = self._top_spin.value()
-        options = {"dedup_level": self._dedup.currentData() or DEFAULT_DEDUP_LEVEL}
+        options = {
+            "dedup_level": self._dedup.currentData() or DEFAULT_DEDUP_LEVEL,
+            "archive_all": self._cb_archive.isChecked(),
+            "keep_structure": self._cb_structure.isChecked(),
+            "auto_rename": self._cb_rename.isChecked(),
+        }
         mw = self.window()
         if hasattr(mw, "start_analysis"):
             mw.start_analysis(model_id, api_key, in_dir, out_dir, top_n,

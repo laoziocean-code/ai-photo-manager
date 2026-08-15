@@ -59,6 +59,11 @@ QPushButton:hover {
 QPushButton:pressed {
     background-color: #F1E7DA;
 }
+QPushButton:disabled {
+    background-color: #EDE7DC;
+    border-color: #E3DBCE;
+    color: #B3A795;
+}
 #primaryBtn {
     background-color: #E07B39;
     border: none;
@@ -73,6 +78,10 @@ QPushButton:pressed {
 }
 #primaryBtn:pressed {
     background-color: #B25C22;
+}
+#primaryBtn:disabled {
+    background-color: #D8C5AE;
+    color: #F3ECE2;
 }
 #settingsBtn {
     background-color: transparent;
@@ -240,10 +249,16 @@ QCheckBox::indicator {
     width: 18px;
     height: 18px;
     border: 1px solid #C9B9A6;
-    border-radius: 4px;
+    border-radius: 5px;
     background-color: #FFFFFF;
+}
+QCheckBox::indicator:hover {
+    border-color: #E07B39;
 }
 QCheckBox::indicator:checked {
     background-color: #E07B39;
     border-color: #E07B39;
+}
+QCheckBox:disabled {
+    color: #B3A795;
 }

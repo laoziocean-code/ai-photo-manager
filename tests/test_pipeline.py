@@ -106,10 +106,13 @@ def test_pipeline_end_to_end(workdir, monkeypatch):
     assert tokens.get("total", 0) >= 180  # 每张 120+60
     assert summary.get("saved_sec", 0) > 0
     assert summary.get("saved_time", "") != ""
-    # 精选导出与报告
-    assert os.path.isdir(os.path.join(out, "AI精选"))
+    # 归档导出与报告（归档全部 → 精选/普通/废片/去重 四文件夹）
+    assert os.path.isdir(os.path.join(out, "精选"))
+    assert os.path.isdir(os.path.join(out, "普通"))
+    assert os.path.isdir(os.path.join(out, "废片"))
+    assert os.path.isdir(os.path.join(out, "去重"))
     # 不再生成 xlsx 清单
-    assert not os.path.exists(os.path.join(out, "AI精选", "精选清单.xlsx"))
+    assert not os.path.exists(os.path.join(out, "精选", "精选清单.xlsx"))
     report = os.path.join(out, "摄影报告.html")
     assert os.path.exists(report)
     html = open(report, encoding="utf-8").read()

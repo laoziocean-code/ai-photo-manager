@@ -21,6 +21,9 @@ class SettingsManager:
         self._dedup_tag = "dedup_level"
         self._notify_tag = "notify_on_finish"
         self._shutdown_tag = "auto_shutdown"
+        self._archive_tag = "archive_all"
+        self._structure_tag = "keep_structure"
+        self._rename_tag = "auto_rename"
 
     # ---- API Key（加密）----
     def get_api_key(self) -> str:
@@ -99,6 +102,25 @@ class SettingsManager:
 
     def set_auto_shutdown(self, on: bool):
         self._qs.setValue(self._shutdown_tag, bool(on))
+
+    # ---- 归档 / 保留结构 / 自动重命名 ----
+    def get_archive_all(self) -> bool:
+        return self._qs.value(self._archive_tag, True, type=bool)
+
+    def set_archive_all(self, on: bool):
+        self._qs.setValue(self._archive_tag, bool(on))
+
+    def get_keep_structure(self) -> bool:
+        return self._qs.value(self._structure_tag, False, type=bool)
+
+    def set_keep_structure(self, on: bool):
+        self._qs.setValue(self._structure_tag, bool(on))
+
+    def get_auto_rename(self) -> bool:
+        return self._qs.value(self._rename_tag, False, type=bool)
+
+    def set_auto_rename(self, on: bool):
+        self._qs.setValue(self._rename_tag, bool(on))
 
     # ---- 分析历史（最近报告，JSON 持久化，最多 20 条）----
     def get_recent_reports(self) -> list:

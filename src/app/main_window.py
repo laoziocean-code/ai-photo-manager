@@ -62,9 +62,13 @@ class MainWindow(QMainWindow):
     def start_analysis(self, model_id, api_key, input_dir, output_dir, top_n=10,
                        model_override="", options=None):
         self._stack.setCurrentIndex(1)
+        self._home.set_analyzing(True)
         self._analysis.start(model_id, api_key, input_dir, output_dir, top_n,
                              model_override, options)
 
     def set_summary(self, summary):
         self._last_summary = summary
         self._report.set_summary(summary)
+
+    def set_analyzing(self, busy: bool):
+        self._home.set_analyzing(busy)

@@ -26,9 +26,11 @@ from src.core.preprocessing.quality_filter import (
     collect_dedup_groups, filter_photos,
 )
 from src.core.report.html_report import render_report
-from src.core.retouch.lr_advice import format_lr
+from src.core.retouch.lr_advice import (
+    format_lr, lr_copy_text, lr_note, lr_params,
+)
 from src.core.scoring.scorer import compute_total, grade
-from src.core.selection.top_selector import export_top, select_top
+from src.core.selection.top_selector import export_organized, select_top
 from src.utils.logger import get_logger
 
 logger = get_logger("analysis")
@@ -121,8 +123,19 @@ class AnalysisController:
         saved_sec = int(len(image_paths) * _SECONDS_PER_PHOTO)
 
         tier1, tier2, tier3 = _split_tiers(results, top_n)
-        progress("export", 0, 1, "导出精选原图与生成报告…")
-        export_top(tier1, output_dir, top_n)
+        progress("export", 0, 1, "归档照片与生成报告…")
+        archive_all = bool((options or {}).get("archive_all", True))
+        keep_structure = bool((options or {}).get("keep_structure", False))
+        auto_rename = bool((options or {}).get("auto_rename", False))
+        try:
+            src_root = os.path.commonpath(image_paths) if image_paths else ""
+        except Exception:
+            src_root = ""
+        export_organized(
+            tier1, tier2, tier3, rejected, output_dir,
+            archive_all=archive_all, keep_structure=keep_structure,
+            auto_rename=auto_rename, src_root=src_root,
+        )
 
         avg = round(sum(r.total_score for r in results) / total, 1) if total else 0
         render_report({
@@ -184,13 +197,17 @@ def _thumb_data_url(path: str) -> str:
 
 
 def _card(rec):
+    lr = rec.ai.get("lr_advice", {})
     return {
         "path": rec.path,
         "name": rec.name,
         "score": round(rec.total_score, 1),
         "grade": grade(rec.total_score),
         "review": rec.ai.get("review", ""),
-        "retouch": format_lr(rec.ai.get("lr_advice", {})),
+        "retouch": format_lr(lr),
+        "lr_params": lr_params(lr),
+        "lr_copy": lr_copy_text(lr),
+        "lr_note": lr_note(lr),
         "category": rec.ai.get("category", ""),
         "publish": format_publish(rec.ai.get("publish", {})),
         "exif": humanize_exif(rec.meta.exif),

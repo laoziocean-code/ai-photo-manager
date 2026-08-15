@@ -12,10 +12,20 @@
       <p>{{ photo.review }}</p>
     </div>
 
+    {% if photo.lr_params or photo.lr_copy %}
     <div class="section">
-      <div class="label">Lightroom 修图建议</div>
-      <p>{{ photo.retouch }}</p>
+      <div class="label">Lightroom 修图参数</div>
+      <div class="lr-box">
+        {% for p in photo.lr_params %}
+        <div class="lr-row"><span class="lr-k">{{ p.label }}</span><span class="lr-v">{{ p.value }}</span></div>
+        {% endfor %}
+        <button class="lr-copy" type="button" data-lr="{{ photo.lr_copy }}" onclick="copyLr(this)">复制参数</button>
+      </div>
+      {% if photo.lr_note %}
+      <p class="lr-note">{{ photo.lr_note }}</p>
+      {% endif %}
     </div>
+    {% endif %}
 
     {% if photo.publish %}
     <div class="section">
