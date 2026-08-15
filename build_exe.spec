@@ -52,7 +52,7 @@ a = Analysis(
     ],
     hiddenimports=[
         "PySide6.QtCore", "PySide6.QtWidgets", "PySide6.QtGui",
-        "openai", "anthropic", "cv2", "PIL", "imagehash", "jinja2", "cryptography",
+        "openai", "anthropic", "cv2", "PIL", "jinja2", "cryptography",
         "rawpy",
     ],
     hookspath=[],
@@ -81,6 +81,8 @@ a = Analysis(
         "PySide6.QtLabsQmlModels", "PySide6.QtLabsSettings",
         "PySide6.QtLabsSharedImage", "PySide6.QtLabsWavefrontMesh",
         "PySide6.QtTextToSpeech", "PySide6.QtSpatialAudio",
+        # pHash 已改为纯 numpy 实现，不再需要 imagehash/scipy/PyWavelets
+        "imagehash", "scipy", "pywt",
         # 运行时不需要的开发/测试相关
         "pytest", "PyInstaller",
     ],

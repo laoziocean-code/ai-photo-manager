@@ -1,7 +1,6 @@
 PySide6>=6.7.0
 Pillow>=10.0.0
 opencv-python-headless>=4.8.0
-imagehash>=4.3.0
 numpy>=1.24.0
 cryptography>=42.0.0
 openai>=1.30.0

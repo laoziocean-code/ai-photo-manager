@@ -2,10 +2,13 @@
 
 - 精确去重：文件 MD5 完全一致。
 - 相似检测：感知哈希（pHash）Hamming 距离，低于阈值视为同一场景的不同拍。
+
+pHash 用纯 numpy 实现 DCT-II（与 imagehash.phash 算法一致），
+避免引入 scipy / PyWavelets 依赖，显著减小打包体积。
 """
 import hashlib
 
-import imagehash
+import numpy as np
 
 from src.core.image_io import load_image
 
@@ -20,6 +23,40 @@ DEDUP_LEVELS = {
     "极宽": 18,
 }
 DEFAULT_DEDUP_LEVEL = "标准"
+
+
+class PHash:
+    """轻量感知哈希（替代 imagehash.ImageHash）。
+
+    支持 -（Hamming 距离）、==、str()，算法与 imagehash.phash 一致。
+    """
+    __slots__ = ("_bits",)
+
+    def __init__(self, bits):
+        self._bits = np.asarray(bits, dtype=bool).flatten()
+
+    def __sub__(self, other) -> int:
+        return int(np.count_nonzero(self._bits != other._bits))
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, PHash):
+            return NotImplemented
+        return self.__sub__(other) == 0
+
+    def __hash__(self) -> int:
+        return hash(self._bits.tobytes())
+
+    def __str__(self) -> str:
+        return "".join("1" if b else "0" for b in self._bits)
+
+
+def _dct2(a: np.ndarray) -> np.ndarray:
+    """2D DCT-II（未归一化），等价 scipy.fftpack.dct(type=2, norm=None)。"""
+    n = a.shape[0]
+    idx = np.arange(n)
+    k = idx[:, None]
+    c = 2.0 * np.cos(np.pi * k * (2 * idx + 1) / (2 * n))
+    return c @ a @ c.T
 
 
 def resolve_dedup_threshold(options: dict) -> int | None:
@@ -45,20 +82,28 @@ def compute_md5(path: str, chunk: int = 65536) -> str:
     return h.hexdigest()
 
 
-def compute_phash(path: str, hash_size: int = 8) -> imagehash.ImageHash:
-    """返回 ImageHash 对象（支持 - 运算符求 Hamming 距离）。
+def compute_phash(path: str, hash_size: int = 8) -> PHash:
+    """返回 PHash 对象（支持 - 运算符求 Hamming 距离）。
 
-    像素加载统一走 image_io.load_image，RAW（NEF 等）也能正确计算感知哈希。
+    与 imagehash.phash 算法一致：灰度 → 缩放到 (hash_size*4)² → DCT-II →
+    取低频 hash_size² 系数与中位数比较成布尔位。
+    像素加载统一走 image_io.load_image，RAW（NEF 等）也能正确计算。
     """
+    from PIL import Image
     im = load_image(path)
     try:
-        return imagehash.phash(im.convert("RGB"), hash_size=hash_size)
+        gray = im.convert("L").resize((hash_size * 4, hash_size * 4), Image.LANCZOS)
+        pixels = np.asarray(gray, dtype=np.float64)
+        dct = _dct2(pixels)
+        low = dct[:hash_size, :hash_size]
+        med = float(np.median(low))
+        return PHash(low > med)
     finally:
         im.close()
 
 
 def find_groups(records, threshold: int = 8):
-    """对 records（含 'phash' ImageHash）做相似聚类。
+    """对 records（含 'phash' PHash）做相似聚类。
 
     返回若干分组，每组是 records 的下标列表；Hamming 距离 <= threshold 归为一组。
     """
