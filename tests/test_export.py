@@ -96,6 +96,19 @@ def test_build_auto_name_fallback():
     assert name.startswith("星空-")
 
 
+def test_build_auto_name_other_uses_style():
+    """分类为「其他」时，用修图风格作为特质兜底。"""
+    r = PhotoRecord(path="x.jpg")
+    r.ai = {"category": "其他", "lr_advice": {"style": "暗调电影感"}}
+    assert build_auto_name(r).startswith("暗调电影感-")
+
+
+def test_build_auto_name_other_no_style():
+    r = PhotoRecord(path="x.jpg")
+    r.ai = {"category": "其他"}
+    assert build_auto_name(r).startswith("照片-")
+
+
 def test_lr_params_and_copy():
     lr = {"exposure": 0.2, "highlights": -15, "shadows": 10,
           "temperature": 8, "style": "胶片清新", "explanation": "平衡肤色"}

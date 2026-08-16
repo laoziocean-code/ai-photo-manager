@@ -50,12 +50,18 @@ def _datetime_from_exif(rec: PhotoRecord) -> str:
 def build_auto_name(rec: PhotoRecord) -> str:
     """按「特质-拍摄时间」生成文件名主体（不含扩展名）。
 
-    特质取 AI 分类（人像/风景/建筑/星空/美食/旅行），缺省用「照片」；
-    拍摄时间优先 EXIF，其次文件修改时间。
+    特质优先取 AI 分类（人像/风景/建筑/星空/美食/旅行）；分类为「其他」或
+    缺失时，退而求其次用修图风格（如「胶片清新」「暗调电影感」），
+    再没有才用「照片」。拍摄时间优先 EXIF，其次文件修改时间。
     """
-    trait = ((rec.ai or {}).get("category") or "").strip()
+    ai = rec.ai or {}
+    trait = (ai.get("category") or "").strip()
     if not trait or trait == "其他":
-        trait = "照片"
+        style = ((ai.get("lr_advice") or {}).get("style") or "").strip()
+        if style:
+            trait = _safe_filename(style)[:8]
+        else:
+            trait = "照片"
     dt = _datetime_from_exif(rec)
     if not dt:
         try:
