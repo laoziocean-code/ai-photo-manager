@@ -82,7 +82,6 @@ a = Analysis(
         "PySide6.QtLabsSharedImage", "PySide6.QtLabsWavefrontMesh",
         "PySide6.QtTextToSpeech", "PySide6.QtSpatialAudio",
         # pHash 已改为纯 numpy 实现，不再需要 imagehash/scipy/PyWavelets
-        "imagehash", "scipy", "pywt",
         # 运行时不需要的开发/测试相关
         "pytest", "PyInstaller",
     ],

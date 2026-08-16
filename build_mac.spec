@@ -64,7 +64,7 @@ a = Analysis(
     ],
     hiddenimports=[
         "PySide6.QtCore", "PySide6.QtWidgets", "PySide6.QtGui",
-        "openai", "anthropic", "cv2", "PIL", "imagehash", "jinja2", "cryptography",
+        "openai", "anthropic", "cv2", "PIL", "jinja2", "cryptography",
         "rawpy",
     ],
     hookspath=[],
