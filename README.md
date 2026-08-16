@@ -8,6 +8,8 @@
 
 **本地预处理 · AI 视觉评分 · 智能精选 · 摄影报告 · 多平台（Windows / macOS / 手机）**
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 [English](#english) · 简体中文
 
 </div>
@@ -46,6 +48,10 @@
 
 ### Windows（桌面版）
 
+**推荐：直接下载安装包** —— 在 [Releases](https://github.com/laoziocean-code/ai-photo-manager/releases) 下载 `AI-Photo-Manager.exe`，双击即可运行（免安装）。
+
+从源码运行（开发者 / 二次开发）：
+
 ```bash
 git clone https://github.com/laoziocean-code/ai-photo-manager.git
 cd ai-photo-manager
@@ -57,6 +63,10 @@ python -m src.main
 
 ### macOS（桌面版）
 
+**推荐：直接下载安装包** —— 在 [Releases](https://github.com/laoziocean-code/ai-photo-manager/releases) 下载 `AI摄影管家.dmg`（v1.1.0 起提供），双击挂载后把 App 拖入「应用程序」即可运行。
+
+从源码运行（开发者 / 二次开发）：
+
 ```bash
 git clone https://github.com/laoziocean-code/ai-photo-manager.git
 cd ai-photo-manager
@@ -66,7 +76,7 @@ pip install -r requirements.txt        # rawpy / PySide6 / opencv 均有 macOS �
 python -m src.main
 ```
 
-> macOS 上首次启动若提示「无法验证开发者」，在「访达」右键 App →「打开」即可。核心代码已跨平台兼容（路径处理自动区分系统）。
+> macOS 上首次启动若提示「无法验证开发者」，在「访达」右键 App →「打开」→「仍要打开」即可。核心代码已跨平台兼容（路径处理自动区分系统）。
 
 ### 手机版（Web / 浏览器访问）
 
@@ -105,14 +115,15 @@ python build.py
 
 产物 `dist/AI摄影管家.exe`（单文件，约 150–500 MB）。
 
-### macOS（.app）
+### macOS（.app / .dmg）
 
 ```bash
 pip install pyinstaller
-python build_mac.py
+python build_mac.py            # 生成 dist/AI摄影管家.app
+bash package_dmg.sh            # 再打包为 dist/AI摄影管家.dmg
 ```
 
-产物 `dist/AI摄影管家.app`。首次打开需右键 →「打开」。如需分发给他人，建议用 Apple Developer 证书签名并公证。
+产物为 `dist/AI摄影管家.app` 或 `dist/AI摄影管家.dmg`。首次打开需右键 →「打开」。如需分发给他人，建议用 Apple Developer 证书签名并公证。
 
 > 手机版无需打包，运行 `python mobile/run_mobile.py` 即作为 Web 服务对外提供。
 
